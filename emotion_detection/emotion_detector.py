@@ -8,7 +8,11 @@ def emotion_detector(text_to_analyse):
     text_to_analyse (str): The text to analyze for emotion detection.
 
     Returns:
-    dict: A formatted dictionary containing the detected emotions and their corresponding scores.
+    dict: The JSON response from the Watson API containing the detected emotions.
+
+    Raises:
+    ValueError: If the API request fails with a status code of 400 (Bad Request).
+    Exception: If the API request fails with any other status code.
     """
     url = 'https://sn-watson-emotion.labs.skills.network/v1/watson.runtime.nlp.v1/NlpService/EmotionPredict'
     headers = {
@@ -21,17 +25,15 @@ def emotion_detector(text_to_analyse):
         }
     }
     
-    response = requests.post(url, headers=headers, json=input_json)
-    
-    if response.status_code == 200:
-        emotions = response.json().get("emotion_predictions", [])
-        formatted_result = {emotion['emotion']: round(emotion['score'], 2) for emotion in emotions}
-        return formatted_result
-    else:
-        raise Exception(f"Request failed with status code {response.status_code}: {response.text}")
+    try:
+        response = requests.post(url, headers=headers, json=input_json, timeout=10)
+        response.raise_for_status()  # Raises an HTTPError for bad responses (4xx and 5xx)
+    except requests.exceptions.HTTPError as http_err:
+        if response.status_code == 400:
+            raise ValueError("Bad Request: The text input is invalid or missing.") from http_err
+        else:
+            raise Exception(f"HTTP error occurred: {http_err}") from http_err
+    except requests.exceptions.RequestException as req_err:
+        raise Exception(f"Request error occurred: {req_err}") from req_err
 
-# Example usage:
-if __name__ == "__main__":
-    text = "I am so happy today!"
-    result = emotion_detector(text)
-    print(result)
+    return response.json()
